@@ -1,38 +1,45 @@
+/* eslint-disable require-await */
+// @ts-check
+
 import _ from 'lodash';
 
-const commands = {}, helpers = {}, extensions = {};
+/**
+ *
+ * @param {ReturnType<import('./find').FindMixin>} Base
+ * @returns {import('../driver').BaseDriverBase<import('@appium/types').TimeoutCommands & import('@appium/types').EventCommands & import('@appium/types').FindCommands & import('@appium/types').LogCommands>}
+ */
+export function LogMixin (Base) {
+  return class LogCommands extends Base {
+    /**
+     * XXX: dubious
+     * @type {Record<string,import('@appium/types').LogType<LogCommands>>}
+     */
+    supportedLogTypes;
 
-// override in sub-classes, with appropriate logs
-// in the form of
-//   {
-//     type: {
-//       description: 'some useful text',
-//       getter: () => {}, // some function that will be called to get the logs
-//     }
-//   }
-extensions.supportedLogTypes = {};
+    async getLogTypes () {
+      this.log.debug('Retrieving supported log types');
+      return _.keys(this.supportedLogTypes);
+    }
+    async getLog (logType) {
+      this.log.debug(`Retrieving '${logType}' logs`);
 
-// eslint-disable-next-line require-await
-commands.getLogTypes = async function getLogTypes () {
-  this.log.debug('Retrieving supported log types');
-  return _.keys(this.supportedLogTypes);
-};
+      if (!(await this.getLogTypes()).includes(logType)) {
+        const logsTypesWithDescriptions = _.reduce(
+          this.supportedLogTypes,
+          (acc, value, key) => {
+            acc[key] = value.description;
+            return acc;
+          },
+          {},
+        );
+        throw new Error(
+          `Unsupported log type '${logType}'. ` +
+            `Supported types: ${JSON.stringify(logsTypesWithDescriptions)}`,
+        );
+      }
 
-commands.getLog = async function getLog (logType) {
-  this.log.debug(`Retrieving '${logType}' logs`);
+      return await this.supportedLogTypes[logType].getter(this);
+    }
+  };
+}
 
-  if (!(await this.getLogTypes()).includes(logType)) {
-    const logsTypesWithDescriptions = _.reduce(this.supportedLogTypes, (acc, value, key) => {
-      acc[key] = value.description;
-      return acc;
-    }, {});
-    throw new Error(`Unsupported log type '${logType}'. ` +
-      `Supported types: ${JSON.stringify(logsTypesWithDescriptions)}`);
-  }
-
-  return await this.supportedLogTypes[logType].getter(this);
-};
-
-Object.assign(extensions, commands, helpers);
-export { commands, helpers};
-export default extensions;
